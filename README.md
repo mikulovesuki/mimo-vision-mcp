@@ -8,6 +8,19 @@
 ![License](https://img.shields.io/badge/License-MIT-green)
 [![CI](https://github.com/mikulovesuki/mimo-vision-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/mikulovesuki/mimo-vision-mcp/actions/workflows/ci.yml)
 
+## 🚀 一键启动（新手也能 1 分钟上手，无需敲任何命令）
+
+本项目内置 **WebUI 一键启动**，全程鼠标操作，自动完成所有环境配置，零命令行门槛：
+
+1. **下载 / 克隆本项目**到本地
+2. **双击 `启动WebUI.bat`**（Windows）——脚本会自动创建环境、安装依赖、启动服务、并**自动打开浏览器**
+3. 浏览器打开后，**拖一张图片进去 → 选个视觉模型 → 点「预览测试」**，即可看到视觉模型"看图说话"
+
+> 首次启动会自动安装依赖（需联网，约 1~2 分钟），之后双击即秒开。
+> 完全不需要懂 Python、不需要手敲 `pip`、不需要手动配置环境变量。
+
+命令行里的文本 LLM 使用视觉能力的完整接入见下方 [接入 opencode](#接入-opencode)。
+
 ## 原理
 
 文本模型负责"调度"，视觉模型负责"看"，MCP 是把两者接起来的接口——**图片数据本身不经过文本模型**。
@@ -23,12 +36,13 @@
 
 ## 特性
 
-- 基于 OpenAI 兼容协议，默认接入 **OpenCode Go**，也可切换小米官方 / 任意自定义供应商
-- stdio 本地传输，可接入 opencode / Claude Desktop / Cursor 等任意 MCP 客户端
+- **一键启动**：双击 `启动WebUI.bat` 即可，自动装依赖、起服务、开浏览器，新手零门槛
+- **开箱即用**：默认接入 **OpenCode Go**，填一个 API Key 即可开始，也可切换小米官方 / 任意自定义供应商
+- 基于 OpenAI 兼容协议，stdio 本地传输，可接入 opencode / Claude Desktop / Cursor 等任意 MCP 客户端
 - 图片输入灵活：**本地路径 / http(s) URL / base64 data URI / 纯 base64** 均可
 - 支持多图输入、图片格式自动识别（JPEG/PNG/GIF/WebP/BMP）、50MB 限制校验
 - 自动按模型选择 API 协议：`gpt-*`/`grok-*` 走 Responses API，其余走 chat/completions（可强制指定）
-- 可选 **WebUI**：可视化配置面板 + 预览测试，选择即同步到 CLI，无需重启
+- 内置 **WebUI** 配置面板：可视化选模型、预览测试，选择即同步到 CLI，无需重启
 - 无 API key 时返回友好错误提示，不会崩溃
 
 ## 目录结构
@@ -40,11 +54,13 @@ mimo-vision-mcp/
 │   ├── image_loader.py     # 图片输入归一化 + MIME 探测
 │   ├── providers.py        # 供应商注册表 + call_vision（chat/responses 适配）
 │   └── server.py           # FastMCP server + 3 个工具
-├── webui/                  # 可选 WebUI（FastAPI + 单页 HTML）
+├── webui/                  # WebUI 配置面板（FastAPI + 单页 HTML）
 ├── tests/                  # 单元测试
 ├── .github/workflows/ci.yml
 ├── opencode.example.json   # opencode 接入配置示例
 ├── AGENTS.md               # 文本模型的调用指引
+├── 启动WebUI.bat           # 🚀 一键启动（Windows，双击即用）
+├── start-webui.bat         # 一键启动英文别名
 ├── LICENSE
 └── pyproject.toml
 ```
@@ -130,17 +146,21 @@ python -m mimo_vision_mcp.server
 
 返回 JSON：`{ "result": "...", "error": "", "model": "...", "usage": {...} }`
 
-## WebUI（交互式前端）
+## WebUI（交互式前端 · 一键启动）
 
-可选的**可视化配置面板**，供人上传图片、自由切换供应商/模型，并**把选择同步到 CLI 的 MCP**。
+**新手首选入口**：图形化界面，上传图片、选模型、看效果，全鼠标操作。
 
-```bash
-# Windows 一键启动：双击 启动WebUI.bat 或 start-webui.bat
-# 手动启动：
-python -m pip install -e ".[web]"
-python -m webui.app
-# 打开 http://127.0.0.1:8000 （端口可用 MIMO_WEBUI_PORT 修改）
-```
+### 一键启动（最简单，无需懂任何命令）
+
+**双击 `启动WebUI.bat`**（Windows）即可：
+
+1. 脚本自动检查/创建环境、自动安装依赖
+2. 自动启动服务并**自动打开浏览器**
+3. 若服务已在运行则直接打开浏览器，不会重复启动
+
+> 非 Windows 用户手动启动：`python -m pip install -e ".[web]" && python -m webui.app`，然后浏览器打开 <http://127.0.0.1:8000>（端口可用 `MIMO_WEBUI_PORT` 修改）。
+
+### 界面功能
 
 - 顶部「CLI / MCP 当前生效模型」显示命令行 LLM 实际使用的供应商/模型/风格
 - 选好模型后点**「应用到 CLI（同步到 MCP）」**，配置写入 `.env`，**无需重启**，CLI 下次调用即用新模型
@@ -155,7 +175,8 @@ python -m pytest -q
 
 ## 常见问题
 
-- **返回"未配置 API Key"**：在 `.env` 配置 `MIMO_API_KEY` 后重启客户端
+- **我不会编程 / 不想敲命令怎么办？**：双击 `启动WebUI.bat` 即可，自动完成所有配置，全程鼠标操作
+- **返回"未配置 API Key"**：在 `.env` 配置 `MIMO_API_KEY`（或直接在 WebUI 里填写并「应用到 CLI」）
 - **图片格式不支持**：仅支持 JPEG/PNG/GIF/WebP/BMP
 - **base64 输入报"无法解析"**：确认输入为合法 base64，且格式在支持范围内
 - **MCP 工具调用超时**：将 `experimental.mcp_timeout` 调到 120000ms 以上
