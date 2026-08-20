@@ -1,0 +1,65 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mimo-vision-mcp"
+version = "0.1.0"
+description = "MCP server giving text-only LLMs vision capability via vision models like Xiaomi MiMo-V2.5"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [
+    { name = "mikulovesuki", email = "1029051655@qq.com" },
+]
+keywords = [
+    "mcp",
+    "model-context-protocol",
+    "vision",
+    "multimodal",
+    "mimo",
+    "opencode",
+    "llm",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = [
+    "mcp>=1.4,<2.0",
+    "openai>=1.40,<2.0",
+    "python-dotenv>=1.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+]
+web = [
+    "fastapi>=0.115.0",
+    "uvicorn>=0.30.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/mikulovesuki/mimo-vision-mcp"
+Repository = "https://github.com/mikulovesuki/mimo-vision-mcp"
+Issues = "https://github.com/mikulovesuki/mimo-vision-mcp/issues"
+
+[project.scripts]
+mimo-vision-mcp = "mimo_vision_mcp.server:main"
+
+[tool.setuptools.packages.find]
+include = ["mimo_vision_mcp*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

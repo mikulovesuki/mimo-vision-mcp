@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>mimo-vision 视觉模型工作台</title>
+<style>
+  :root {
+    --bg: #0f1115; --panel: #181b22; --panel2: #1f232c; --border: #2a2f3a;
+    --text: #e6e8ee; --muted: #9aa3b2; --accent: #4f8cff; --ok: #34c759;
+    --err: #ff5f56; --warn: #ffb020;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font-family: "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
+    font-size: 14px; line-height: 1.6;
+  }
+  .wrap { max-width: 920px; margin: 0 auto; padding: 24px 16px 64px; }
+  header { display: flex; align-items: baseline; gap: 12px; margin-bottom: 18px; }
+  header h1 { font-size: 20px; margin: 0; }
+  header .sub { color: var(--muted); font-size: 13px; }
+  .card {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 12px; padding: 16px; margin-bottom: 16px;
+  }
+  .card h2 { font-size: 14px; margin: 0 0 12px; color: var(--muted); font-weight: 600; }
+  .row { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; }
+  .field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+  .field label { font-size: 12px; color: var(--muted); }
+  .grow { flex: 1; }
+  select, input[type=text], input[type=password], textarea, button {
+    background: var(--panel2); color: var(--text); border: 1px solid var(--border);
+    border-radius: 8px; padding: 9px 12px; font-size: 14px; font-family: inherit;
+    outline: none;
+  }
+  select:focus, input:focus, textarea:focus { border-color: var(--accent); }
+  button { cursor: pointer; border: 1px solid var(--border); transition: .15s; }
+  button:hover { border-color: var(--accent); }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  button.primary:hover { filter: brightness(1.1); }
+  button.ok { background: var(--ok); border-color: var(--ok); color: #fff; font-weight: 600; }
+  button.ok:hover { filter: brightness(1.1); }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  .chips { display: flex; gap: 8px; flex-wrap: wrap; }
+  .chip { font-size: 13px; padding: 6px 12px; }
+  /* active config panel */
+  .active { border-color: var(--ok); }
+  .active h2 { color: var(--ok); }
+  .kv { display: flex; flex-wrap: wrap; gap: 8px 24px; margin: 6px 0 12px; }
+  .kv .item { font-size: 13px; }
+  .kv .item b { color: var(--text); font-weight: 600; }
+  .kv .item span { color: var(--muted); margin-right: 6px; }
+  .msg { display: none; margin-top: 10px; padding: 10px 12px; border-radius: 8px; font-size: 13px; }
+  .msg.ok { display: block; background: rgba(52,199,89,.12); border: 1px solid var(--ok); color: #b7e8c2; }
+  .msg.err { display: block; background: rgba(255,95,86,.12); border: 1px solid var(--err); color: #ffb4ae; }
+  /* dropzone */
+  .dropzone {
+    border: 2px dashed var(--border); border-radius: 12px; padding: 28px 16px;
+    text-align: center; color: var(--muted); cursor: pointer; transition: .15s;
+  }
+  .dropzone:hover, .dropzone.over { border-color: var(--accent); color: var(--text); }
+  .dropzone .hint { font-size: 13px; }
+  .dropzone .small { font-size: 12px; color: var(--muted); }
+  .preview { display: none; position: relative; margin-top: 12px; }
+  .preview img {
+    max-width: 100%; max-height: 320px; border-radius: 10px;
+    border: 1px solid var(--border); display: block;
+  }
+  .preview .clear {
+    position: absolute; top: 8px; right: 8px; background: rgba(0,0,0,.7);
+    border: none; border-radius: 6px; padding: 4px 10px; color: #fff; font-size: 12px;
+  }
+  .urlbar { display: flex; gap: 8px; margin-top: 12px; }
+  .urlbar input { flex: 1; }
+  /* result */
+  #result { display: none; }
+  #loading { display: none; color: var(--muted); padding: 16px 0; }
+  #loading .spinner {
+    display: inline-block; width: 14px; height: 14px; margin-right: 8px;
+    border: 2px solid var(--border); border-top-color: var(--accent);
+    border-radius: 50%; vertical-align: -2px; animation: spin .8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  #outText {
+    white-space: pre-wrap; word-break: break-word; background: var(--panel2);
+    border: 1px solid var(--border); border-radius: 10px; padding: 14px;
+    max-height: 480px; overflow: auto;
+  }
+  #outMeta { color: var(--muted); font-size: 12px; margin-top: 10px; display: flex; gap: 16px; flex-wrap: wrap; }
+  #errBox {
+    display: none; background: rgba(255,95,86,.12); border: 1px solid var(--err);
+    color: #ffb4ae; border-radius: 10px; padding: 12px 14px; margin-top: 12px;
+    white-space: pre-wrap; word-break: break-word;
+  }
+  textarea { width: 100%; resize: vertical; min-height: 84px; }
+  .actions { display: flex; gap: 10px; margin-top: 12px; align-items: center; justify-content: space-between; }
+  .hidden { display: none !important; }
+  .note { font-size: 12px; color: var(--muted); margin: 8px 0 0; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>mimo-vision 视觉模型工作台</h1>
+    <span class="sub">为 CLI 文本模型配置视觉能力（MCP）</span>
+  </header>
+
+  <!-- 生效模型 -->
+  <div class="card active">
+    <h2>CLI / MCP 当前生效模型</h2>
+    <div class="kv" id="activeKv"></div>
+    <div class="actions">
+      <button class="ok" id="applyBtn">应用到 CLI（同步到 MCP）</button>
+      <button id="refreshActive">刷新</button>
+    </div>
+    <div class="msg" id="applyMsg"></div>
+    <p class="note">说明：本页面是 MCP 的配置面板。点「应用到 CLI」会把上面的选择写入 .env，
+      你命令行里的文本 LLM 通过 MCP 调用视觉模型时即使用新配置，<b>无需重启</b>。</p>
+  </div>
+
+  <!-- 选择 -->
+  <div class="card">
+    <h2>选择视觉模型</h2>
+    <div class="row">
+      <div class="field">
+        <label>供应商</label>
+        <select id="provider"></select>
+      </div>
+      <div class="field grow">
+        <label>模型</label>
+        <select id="model"></select>
+      </div>
+      <div class="field" id="customModelWrap" style="display:none">
+        <label>模型 ID</label>
+        <input type="text" id="customModel" placeholder="如 gpt-4o" style="width:220px">
+      </div>
+      <div class="field">
+        <label>细节</label>
+        <select id="detail">
+          <option value="auto">auto</option>
+          <option value="low">low</option>
+          <option value="high">high</option>
+        </select>
+      </div>
+      <button id="refreshModels" title="从供应商拉取全部模型">刷新模型</button>
+    </div>
+
+    <div class="row" style="margin-top:12px">
+      <div class="field grow" id="baseUrlWrap" style="display:none">
+        <label>自定义 base_url（OpenAI 兼容）</label>
+        <input type="text" id="baseUrl" placeholder="https://example.com/v1">
+      </div>
+      <div class="field grow">
+        <label>API Key <span id="keyHint" style="color:var(--muted)"></span></label>
+        <input type="password" id="apiKey" autocomplete="off" placeholder="sk- / tp- / oc- ...">
+      </div>
+      <div class="field" id="styleWrap" style="display:none">
+        <label>API 风格</label>
+        <select id="apiStyle">
+          <option value="">自动</option>
+          <option value="chat">chat</option>
+          <option value="responses">responses</option>
+        </select>
+      </div>
+    </div>
+    <p class="note">API Key 仅保存在本浏览器（localStorage）；点「应用到 CLI」时可选一并写入 .env 供命令行使用。</p>
+  </div>
+
+  <!-- 图片 -->
+  <div class="card">
+    <h2>图片</h2>
+    <div class="dropzone" id="dropzone">
+      <div class="hint">点击选择 / 拖拽图片到此处 / 直接 Ctrl+V 粘贴截图</div>
+      <div class="small">支持 JPG / PNG / GIF / WebP / BMP，单张 ≤ 50MB</div>
+    </div>
+    <div class="preview" id="preview">
+      <img id="previewImg" alt="预览">
+      <button class="clear" id="clearImg">移除</button>
+    </div>
+    <div class="urlbar">
+      <input type="text" id="imgUrl" placeholder="或粘贴图片公网 URL / base64 data URI">
+      <button id="useUrl">使用</button>
+    </div>
+  </div>
+
+  <!-- 预览测试 -->
+  <div class="card">
+    <h2>预览测试（不影响 CLI）</h2>
+    <textarea id="prompt" placeholder="输入你对图片的问题或指令…（仅用于预览，不会保存）"></textarea>
+    <div class="row" style="justify-content:space-between;align-items:center">
+      <div class="chips">
+        <button class="chip" data-p="请详细描述这张图片的内容，包括主体、场景、细节与氛围。">描述</button>
+        <button class="chip" data-p="请分析这张图片，说明其中的关键信息与值得注意的细节。">分析</button>
+        <button class="chip" data-p="请提取图片中的所有文字内容，尽量逐字输出，并保留原有排版顺序。">OCR</button>
+      </div>
+      <button class="primary" id="send">预览测试</button>
+    </div>
+  </div>
+
+  <!-- 结果 -->
+  <div id="loading"><span class="spinner"></span>模型思考中，通常需要 20~60 秒…</div>
+  <div class="card" id="result">
+    <h2>预览结果</h2>
+    <div id="outText"></div>
+    <div id="outMeta"></div>
+    <div id="errBox"></div>
+  </div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  const $ = (id) => document.getElementById(id);
+  const state = { providers: {}, currentImage: null, keySet: false };
+
+  function api(path, opts) {
+    return fetch(path, opts).then(async (r) => {
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(data.detail || data.error || ("HTTP " + r.status));
+      return data;
+    });
+  }
+
+  const keyStore = {
+    get: (pid) => localStorage.getItem("mimo_key_" + pid) || "",
+    set: (pid, v) => localStorage.setItem("mimo_key_" + pid, v || ""),
+  };
+
+  const providerName = (pid) => {
+    if (pid === "__custom__" || pid === "custom") return "自定义兼容";
+    return (state.providers[pid] && state.providers[pid].name) || pid;
+  };
+
+  function load() {
+    api("/api/providers").then((d) => {
+      state.providers = d.providers;
+      state.defaultProvider = d.default_provider;
+      state.defaultModel = d.default_model;
+      state.keySet = d.default_key_set;
+      buildProviderSelect();
+    }).catch((e) => alert("加载失败: " + e.message));
+    refreshActive();
+  }
+
+  function buildProviderSelect() {
+    const sel = $("provider");
+    sel.innerHTML = "";
+    Object.entries(state.providers).forEach(([pid, p]) => {
+      const opt = document.createElement("option");
+      opt.value = pid; opt.textContent = p.name;
+      sel.appendChild(opt);
+    });
+    const opt = document.createElement("option");
+    opt.value = "__custom__"; opt.textContent = "自定义（OpenAI 兼容）";
+    sel.appendChild(opt);
+    sel.value = state.providers[state.defaultProvider] ? state.defaultProvider : "__custom__";
+    onProviderChange();
+  }
+
+  function onProviderChange() {
+    const pid = $("provider").value;
+    const isCustom = pid === "__custom__";
+    $("customModelWrap").style.display = isCustom ? "" : "none";
+    $("baseUrlWrap").style.display = isCustom ? "" : "none";
+    $("styleWrap").style.display = isCustom ? "" : "none";
+
+    if (isCustom) {
+      $("model").classList.add("hidden");
+      $("baseUrl").value = localStorage.getItem("mimo_base_url") || "";
+      $("customModel").value = localStorage.getItem("mimo_model") || "";
+      $("apiStyle").value = localStorage.getItem("mimo_style") || "";
+      $("refreshModels").style.display = "none";
+    } else {
+      $("model").classList.remove("hidden");
+      $("refreshModels").style.display = "";
+      buildModelSelect(pid);
+    }
+
+    $("apiKey").value = keyStore.get(pid);
+    updateKeyHint();
+  }
+
+  function buildModelSelect(pid) {
+    const p = state.providers[pid];
+    const sel = $("model");
+    sel.innerHTML = "";
+    (p.models || []).forEach((m) => {
+      const opt = document.createElement("option");
+      opt.value = m.id; opt.textContent = m.id;
+      sel.appendChild(opt);
+    });
+    const target = p.default_model;
+    if (target) sel.value = target;
+  }
+
+  function updateKeyHint() {
+    $("keyHint").textContent = state.keySet ? "（.env 已配置默认 Key）" : "";
+  }
+
+  // ---- 生效模型 ----
+  function refreshActive() {
+    api("/api/active-config").then((c) => {
+      state.active = c;
+      const kv = $("activeKv");
+      kv.innerHTML =
+        '<div class="item"><span>供应商</span><b>' + providerName(c.provider) + "</b></div>" +
+        '<div class="item"><span>模型</span><b>' + c.model + "</b></div>" +
+        '<div class="item"><span>base_url</span><b>' + c.base_url + "</b></div>" +
+        '<div class="item"><span>API 风格</span><b>' + c.api_style + "</b></div>" +
+        '<div class="item"><span>API Key</span><b>' + (c.key_set ? "已配置" : "未配置") + "</b></div>";
+    }).catch(() => {});
+  }
+
+  $("refreshActive").addEventListener("click", refreshActive);
+
+  $("applyBtn").addEventListener("click", () => {
+    const body = currentConfig();
+    body.provider = body.provider === "__custom__" ? "custom" : body.provider;
+    const msg = $("applyMsg");
+    msg.className = "msg";
+    msg.textContent = "";
+    $("applyBtn").disabled = true;
+    $("applyBtn").textContent = "同步中…";
+    api("/api/apply-to-mcp", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }).then((d) => {
+      msg.className = "msg ok";
+      msg.textContent = "✔ " + d.message + "：" + d.config.provider + " / " + d.config.model;
+      state.keySet = d.config.key_set;
+      refreshActive();
+    }).catch((e) => {
+      msg.className = "msg err";
+      msg.textContent = "同步失败: " + e.message;
+    }).finally(() => {
+      $("applyBtn").disabled = false;
+      $("applyBtn").textContent = "应用到 CLI（同步到 MCP）";
+    });
+  });
+
+  // ---- API Key 自动保存 ----
+  $("apiKey").addEventListener("input", () => {
+    keyStore.set($("provider").value, $("apiKey").value);
+  });
+  $("provider").addEventListener("change", onProviderChange);
+  $("apiStyle").addEventListener("change", () => localStorage.setItem("mimo_style", $("apiStyle").value));
+
+  // ---- 自定义模型输入保存 ----
+  $("baseUrl").addEventListener("input", () => localStorage.setItem("mimo_base_url", $("baseUrl").value));
+  $("customModel").addEventListener("input", () => localStorage.setItem("mimo_model", $("customModel").value));
+
+  // ---- 刷新模型列表 ----
+  $("refreshModels").addEventListener("click", () => {
+    const pid = $("provider").value;
+    const p = state.providers[pid];
+    if (!p || !p.models_url) { alert("该供应商不支持动态拉取"); return; }
+    const key = $("apiKey").value;
+    $("refreshModels").disabled = true;
+    $("refreshModels").textContent = "拉取中…";
+    api("/api/models?provider=" + encodeURIComponent(pid) + "&api_key=" + encodeURIComponent(key))
+      .then((d) => {
+        const sel = $("model");
+        const cur = sel.value;
+        sel.innerHTML = "";
+        d.models.forEach((id) => {
+          const o = document.createElement("option");
+          o.value = id; o.textContent = id;
+          sel.appendChild(o);
+        });
+        if (d.models.includes(cur)) sel.value = cur;
+      })
+      .catch((e) => alert("拉取失败: " + e.message))
+      .finally(() => {
+        $("refreshModels").disabled = false;
+        $("refreshModels").textContent = "刷新模型";
+      });
+  });
+
+  // ---- 图片输入 ----
+  const dz = $("dropzone");
+  dz.addEventListener("click", () => { const inp = document.createElement("input"); inp.type = "file"; inp.accept = "image/*"; inp.onchange = () => inp.files[0] && setFile(inp.files[0]); inp.click(); });
+  dz.addEventListener("dragover", (e) => { e.preventDefault(); dz.classList.add("over"); });
+  dz.addEventListener("dragleave", () => dz.classList.remove("over"));
+  dz.addEventListener("drop", (e) => { e.preventDefault(); dz.classList.remove("over"); const f = e.dataTransfer.files[0]; if (f && f.type.startsWith("image/")) setFile(f); });
+  document.addEventListener("paste", (e) => {
+    const items = e.clipboardData && e.clipboardData.items;
+    if (!items) return;
+    for (const it of items) {
+      if (it.type && it.type.startsWith("image/")) {
+        const f = it.getAsFile(); if (f) { setFile(f); break; }
+      }
+    }
+  });
+
+  function setFile(file) {
+    if (file.size > 50 * 1024 * 1024) { alert("图片超过 50MB 限制"); return; }
+    const reader = new FileReader();
+    reader.onload = () => { state.currentImage = reader.result; showPreview(reader.result); };
+    reader.readAsDataURL(file);
+  }
+
+  $("useUrl").addEventListener("click", () => {
+    const v = $("imgUrl").value.trim();
+    if (!v) return;
+    if (v.startsWith("data:") || v.startsWith("http://") || v.startsWith("https://")) {
+      state.currentImage = v;
+      showPreview(v);
+    } else {
+      alert("请输入 http(s) URL 或 data: 开头的 base64 数据");
+    }
+  });
+
+  function showPreview(src) {
+    $("previewImg").src = src;
+    $("preview").style.display = "block";
+    $("dropzone").style.display = "none";
+  }
+  $("clearImg").addEventListener("click", () => {
+    state.currentImage = null;
+    $("preview").style.display = "none";
+    $("dropzone").style.display = "block";
+    $("previewImg").src = "";
+    $("imgUrl").value = "";
+  });
+
+  // ---- 快捷 prompt ----
+  document.querySelectorAll(".chip").forEach((btn) => {
+    btn.addEventListener("click", () => { $("prompt").value = btn.dataset.p; });
+  });
+
+  // ---- 预览测试 ----
+  $("send").addEventListener("click", doSend);
+  $("prompt").addEventListener("keydown", (e) => { if (e.ctrlKey && e.key === "Enter") doSend(); });
+
+  function currentConfig() {
+    const pid = $("provider").value;
+    const isCustom = pid === "__custom__";
+    return {
+      provider: isCustom ? "custom" : pid,
+      model: isCustom ? $("customModel").value.trim() : $("model").value,
+      base_url: isCustom ? $("baseUrl").value.trim() || null : null,
+      api_key: $("apiKey").value.trim(),
+      api_style: isCustom ? ($("apiStyle").value || null) : null,
+      detail: $("detail").value,
+    };
+  }
+
+  function doSend() {
+    const cfg = currentConfig();
+    const prompt = $("prompt").value.trim();
+    if (!state.currentImage) { alert("请先添加一张图片"); return; }
+    if (!prompt) { alert("请输入问题或指令"); return; }
+    if (cfg.model === "") { alert("请填写模型 ID"); return; }
+
+    const body = {
+      provider: cfg.provider,
+      model: cfg.model,
+      base_url: cfg.base_url,
+      api_key: cfg.api_key,
+      api_style: cfg.api_style,
+      images: [state.currentImage],
+      prompt: prompt,
+      detail: cfg.detail,
+    };
+
+    $("loading").style.display = "";
+    $("result").style.display = "none";
+    $("errBox").style.display = "none";
+    $("send").disabled = true;
+
+    api("/api/analyze", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }).then((d) => {
+      render(d);
+    }).catch((e) => {
+      $("result").style.display = "";
+      $("errBox").textContent = "请求失败: " + e.message;
+      $("errBox").style.display = "";
+    }).finally(() => {
+      $("loading").style.display = "none";
+      $("send").disabled = false;
+    });
+  }
+
+  function render(d) {
+    $("result").style.display = "";
+    $("errBox").style.display = "";
+    if (d.error) {
+      $("outText").textContent = "";
+      $("outMeta").textContent = "";
+      $("errBox").textContent = d.error;
+      $("errBox").style.display = "";
+      return;
+    }
+    $("outText").textContent = d.result || "（空结果）";
+    const u = d.usage || {};
+    const parts = [
+      "模型: " + (d.model || "-"),
+      "耗时: " + (d.elapsed_ms != null ? (d.elapsed_ms / 1000).toFixed(1) + "s" : "-"),
+      "输入: " + (u.prompt_tokens != null ? u.prompt_tokens + " tokens" : "-"),
+      "输出: " + (u.completion_tokens != null ? u.completion_tokens + " tokens" : "-"),
+      "总计: " + (u.total_tokens != null ? u.total_tokens + " tokens" : "-"),
+    ];
+    $("outMeta").textContent = parts.join("    |    ");
+  }
+
+  load();
+})();
+</script>
+</body>
+</html>
