@@ -5,9 +5,12 @@ frontend). Both call `call_vision`, which transparently supports both the
 Chat Completions API (chat) and the Responses API (responses).
 """
 
+import time
 from typing import Any
 
+import httpx
 from openai import OpenAI
+from openai import APIConnectionError, APITimeoutError
 
 from . import config
 from .image_loader import build_image_part, build_responses_image_part, normalize_input
@@ -108,44 +111,68 @@ def call_vision(
     client = OpenAI(api_key=api_key, base_url=base_url, timeout=timeout)
     system = config.get_system_prompt()
 
-    try:
-        if style == "responses":
-            response = client.responses.create(
-                model=model,
-                input=[
-                    {"role": "system", "content": system},
-                    {"role": "user", "content": parts + [{"type": "input_text", "text": prompt}]},
-                ],
-                max_output_tokens=max_tokens,
-                stream=False,
-            )
-            result = getattr(response, "output_text", None) or ""
-            usage = getattr(response, "usage", None)
-            usage_map = {
-                "prompt_tokens": getattr(usage, "input_tokens", None),
-                "completion_tokens": getattr(usage, "output_tokens", None),
-                "total_tokens": getattr(usage, "total_tokens", None),
-            } if usage else None
-        else:
-            completion = client.chat.completions.create(
-                model=model,
-                messages=[
-                    {"role": "system", "content": system},
-                    {"role": "user", "content": parts + [{"type": "text", "text": prompt}]},
-                ],
-                max_completion_tokens=max_tokens,
-                temperature=0.3,
-                stream=False,
-            )
-            result = completion.choices[0].message.content or ""
-            usage = getattr(completion, "usage", None)
-            usage_map = {
-                "prompt_tokens": getattr(usage, "prompt_tokens", None),
-                "completion_tokens": getattr(usage, "completion_tokens", None),
-                "total_tokens": getattr(usage, "total_tokens", None),
-            } if usage else None
-    except Exception as exc:  # noqa: BLE001
-        return {"error": f"调用视觉模型失败: {exc}", "result": ""}
+    # Transient network errors (connection drop / timeout) are retried a couple
+    # of times, because upstreams like opencode.ai can be intermittently flaky.
+    max_attempts = max(1, config.get_max_retries())
+    last_error: Exception | None = None
+    for attempt in range(max_attempts):
+        try:
+            payload = _do_call(client, system, style, model, parts, prompt, max_tokens)
+            return payload
+        except (APIConnectionError, APITimeoutError, httpx.TransportError) as exc:
+            last_error = exc
+            if attempt < max_attempts - 1:
+                time.sleep(0.5 * (attempt + 1))
+        except Exception as exc:  # noqa: BLE001 - non-transient error
+            return {"error": f"调用视觉模型失败: {exc}", "result": ""}
+
+    return {"error": f"调用视觉模型失败（网络重试 {max_attempts} 次仍失败）: {last_error}", "result": ""}
+
+
+def _do_call(
+    client: OpenAI,
+    system: str,
+    style: str,
+    model: str,
+    parts: list[dict[str, Any]],
+    prompt: str,
+    max_tokens: int,
+) -> dict[str, Any]:
+    if style == "responses":
+        response = client.responses.create(
+            model=model,
+            input=[
+                {"role": "system", "content": system},
+                {"role": "user", "content": parts + [{"type": "input_text", "text": prompt}]},
+            ],
+            max_output_tokens=max_tokens,
+            stream=False,
+        )
+        result = getattr(response, "output_text", None) or ""
+        usage = getattr(response, "usage", None)
+        usage_map = {
+            "prompt_tokens": getattr(usage, "input_tokens", None),
+            "completion_tokens": getattr(usage, "output_tokens", None),
+            "total_tokens": getattr(usage, "total_tokens", None),
+        } if usage else None
+    else:
+        completion = client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": system},
+                {"role": "user", "content": parts + [{"type": "text", "text": prompt}]},
+            ],
+            max_completion_tokens=max_tokens,
+            temperature=0.3,
+            stream=False,
+        )
+        result = completion.choices[0].message.content or ""
+        usage = getattr(completion, "usage", None)
+        usage_map = {
+            "prompt_tokens": getattr(usage, "prompt_tokens", None),
+            "completion_tokens": getattr(usage, "completion_tokens", None),
+            "total_tokens": getattr(usage, "total_tokens", None),
+        } if usage else None
 
     return {"error": "", "result": result, "model": model, "usage": usage_map}
 

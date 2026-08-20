@@ -57,6 +57,10 @@ def get_timeout() -> float:
     return float(_get("MIMO_TIMEOUT", "120"))
 
 
+def get_max_retries() -> int:
+    return int(_get("MIMO_MAX_RETRIES", "2"))
+
+
 def get_webui_port() -> int:
     return int(_get("MIMO_WEBUI_PORT", "8000"))
 
